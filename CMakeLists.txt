@@ -7,6 +7,9 @@ set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 set(SUBPROJECT_NAME feature-matcher)
+set(TARGET_ORB "${SUBPROJECT_NAME}-orb")
+set(TARGET_SURF "${SUBPROJECT_NAME}-surf")
+set(TARGET_CUDA "${SUBPROJECT_NAME}-cuda")
 project(${SUBPROJECT_NAME} LANGUAGES CXX)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
@@ -26,10 +29,12 @@ endif()
 
 #--------------------------------------------------------------------------------------------------
 
-add_library(${SUBPROJECT_NAME} SHARED)
-set_property(TARGET ${SUBPROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
+add_library(${TARGET_ORB} SHARED)
+add_library(${TARGET_SURF} SHARED)
+set_property(TARGET ${TARGET_ORB} PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_property(TARGET ${TARGET_SURF} PROPERTY POSITION_INDEPENDENT_CODE ON)
 if (cuda)
-  add_library(${SUBPROJECT_NAME}_cuda SHARED)
+  add_library(${TARGET_CUDA} SHARED)
 endif()
 
 set(SOURCES
@@ -37,34 +42,51 @@ set(SOURCES
     match_result.cpp
 )
 
-set(CUDA_SOURCES
-    feature_matcher.cu
+set(SOURCES_ORB
+    ${SOURCES}
+    orb_matcher.cpp
 )
 
-target_sources(${SUBPROJECT_NAME} PRIVATE ${SOURCES})
+set(SOURCES_SURF
+    ${SOURCES}
+    surf_matcher.cpp
+)
 
-target_link_libraries(${SUBPROJECT_NAME} ${OpenCV_LIBS})
+set(CUDA_SOURCES
+    ${SOURCES}
+    feature_matcher.cu
+    #cuda_matcher.cu
+)
 
-target_include_directories(${SUBPROJECT_NAME} PUBLIC
+target_sources(${TARGET_ORB} PRIVATE ${SOURCES_ORB})
+target_sources(${TARGET_SURF} PRIVATE ${SOURCES_SURF})
+
+target_link_libraries(${TARGET_ORB} ${OpenCV_LIBS})
+target_link_libraries(${TARGET_SURF} ${OpenCV_LIBS})
+
+target_include_directories(${TARGET_ORB} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  ${OpenCV_INCLUDE_DIRS}
+)
+target_include_directories(${TARGET_SURF} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   ${OpenCV_INCLUDE_DIRS}
 )
 
 if (cuda)
-  set_target_properties(${SUBPROJECT_NAME}_cuda PROPERTIES CUDA_ARCHITECTURES "native")
+  set_target_properties(${TARGET_CUDA} PROPERTIES CUDA_ARCHITECTURES "native")
 
-  target_sources(${SUBPROJECT_NAME}_cuda PRIVATE ${SOURCES})
-  target_sources(${SUBPROJECT_NAME}_cuda PRIVATE ${CUDA_SOURCES})
+  target_sources(${TARGET_CUDA} PRIVATE ${CUDA_SOURCES})
 
   set_source_files_properties(${CUDA_SOURCES}
     PROPERTIES COMPILE_FLAGS "--extended-lambda --expt-relaxed-constexpr"
   )
-  set_property(TARGET ${SUBPROJECT_NAME}_cuda PROPERTY POSITION_INDEPENDENT_CODE ON)
-  target_compile_definitions(${SUBPROJECT_NAME}_cuda PRIVATE WITH_CUDA=1)
+  set_property(TARGET ${TARGET_CUDA} PROPERTY POSITION_INDEPENDENT_CODE ON)
+  target_compile_definitions(${TARGET_CUDA} PRIVATE WITH_CUDA=1)
 
-  target_link_libraries(${SUBPROJECT_NAME}_cuda ${OpenCV_LIBS})
+  target_link_libraries(${TARGET_CUDA} ${OpenCV_LIBS})
 
-  target_include_directories(${SUBPROJECT_NAME}_cuda PUBLIC
+  target_include_directories(${TARGET_CUDA} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     ${OpenCV_INCLUDE_DIRS}
   )

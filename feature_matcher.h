@@ -62,4 +62,4 @@ struct feature_matcher
     cv::cuda::GpuMat            gpu_reference_descriptors;
 #endif
 };
-    
+
