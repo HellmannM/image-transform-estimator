@@ -50,7 +50,7 @@ struct feature_matcher
     feature_matcher();
     void set_reference_image(const std::vector<uint8_t>& data, int width, int height, PIXEL_TYPE pixel_type);
     void init(const cv::Mat& reference_image);
-    match_result_t match(const cv::Mat& current_image);
+    void match(const std::vector<uint8_t>& data, int width, int height, PIXEL_TYPE pixel_type);
 
     cv::Ptr<Detector>           detector;
     cv::Ptr<Descriptor>         descriptor;
@@ -58,6 +58,7 @@ struct feature_matcher
     bool                        matcher_initialized;
     cv::Mat                     reference_descriptors;
     std::vector<cv::KeyPoint>   reference_keypoints;
+    match_result_t              match_result;
 #if HAVE_CUDA
     cv::cuda::GpuMat            gpu_reference_descriptors;
 #endif

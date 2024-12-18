@@ -104,19 +104,46 @@ void feature_matcher<Detector, Descriptor, Matcher>::init(const cv::Mat& referen
 }
     
 template <typename Detector, typename Descriptor, typename Matcher>
-match_result_t feature_matcher<Detector, Descriptor, Matcher>::match(const cv::Mat& current_image)
+void feature_matcher<Detector, Descriptor, Matcher>::match(
+    const std::vector<uint8_t>& data, int width, int height, PIXEL_TYPE pixel_type)
 {
-    std::vector<cv::KeyPoint> current_keypoints;
-    match_result_t result;
+    if (pixel_type != PIXEL_TYPE::RGBA)
+    {
+        std::cerr << "Feature matcher: Unsupported pixel type.\n";
+        return;
+    }
+    #define SHUFFLE2
+    #ifdef SHUFFLE2
+    int bpp = 4;
+    std::vector<uint8_t> shuffled;
+    shuffled.resize(width * height * bpp);
+    for (size_t y=0; y<height; ++y)
+    {
+        for (size_t x=0; x<width; ++x)
+        {
+            shuffled[4 * ((height - y - 1) * width + x)    ] = data.data()[4*(y * width + x)    ];
+            shuffled[4 * ((height - y - 1) * width + x) + 1] = data.data()[4*(y * width + x) + 1];
+            shuffled[4 * ((height - y - 1) * width + x) + 2] = data.data()[4*(y * width + x) + 2];
+            shuffled[4 * ((height - y - 1) * width + x) + 3] = data.data()[4*(y * width + x) + 3];
+        }
+    }
+    const auto pixels = reinterpret_cast<void*>(shuffled.data());
+    #else
+    const auto pixels = reinterpret_cast<void*>(data.data());
+    #endif
+    const auto current_image = cv::Mat(height, width, CV_8UC4, pixels);
 
-    if (!matcher_initialized) return {};
+    std::vector<cv::KeyPoint> current_keypoints;
+    match_result = match_result_t();
+
+    if (!matcher_initialized) return;
     cv::Mat current_descriptors;
     detector->detect(current_image, current_keypoints, cv::noArray());
     descriptor->compute(current_image, current_keypoints, current_descriptors);
-    matcher->match(current_descriptors, result.matches, cv::noArray());
-    result.num_ref_descriptors = reference_descriptors.size().height;
-    result.reference_keypoints = reference_keypoints;
-    result.query_keypoints = current_keypoints;
+    matcher->match(current_descriptors, match_result.matches, cv::noArray());
+    match_result.num_ref_descriptors = reference_descriptors.size().height;
+    match_result.reference_keypoints = reference_keypoints;
+    match_result.query_keypoints = current_keypoints;
 
     //cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
     //cv::Mat img;
@@ -124,7 +151,6 @@ match_result_t feature_matcher<Detector, Descriptor, Matcher>::match(const cv::M
     //cv::drawMatches(current_image, current_keypoints, current_image, reference_keypoints, result.matches, img);
     //cv::imshow("Display Image", img);
     //cv::waitKey(0);
-    return result;
 }
 
 #if VSNRAY_COMMON_HAVE_CUDA
@@ -163,23 +189,22 @@ void feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>:
 }
 
 template<>
-match_result_t feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>::match(const cv::Mat& current_image)
+void feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>::match(const cv::Mat& current_image)
 {
+    match_result = match_result_t();
     std::vector<cv::KeyPoint> current_keypoints;
-    match_result_t result;
     cv::cuda::GpuMat gpu_current_descriptors;
     cv::cuda::GpuMat gpu_current_image_color(current_image);
     cv::cuda::GpuMat gpu_current_image;
     cv::cuda::cvtColor(gpu_current_image_color, gpu_current_image, cv::COLOR_RGBA2GRAY);
 
     detector->detectAndCompute(gpu_current_image, cv::noArray(), current_keypoints, gpu_current_descriptors);
-    if (!matcher_initialized) return {};
-    matcher->match(gpu_current_descriptors, result.matches);
+    if (!matcher_initialized) return;
+    matcher->match(gpu_current_descriptors, match_result.matches);
 
-    result.num_ref_descriptors = gpu_reference_descriptors.size().height;
-    result.reference_keypoints = reference_keypoints;
-    result.query_keypoints = current_keypoints;
-    return result;
+    match_result.num_ref_descriptors = gpu_reference_descriptors.size().height;
+    match_result.reference_keypoints = reference_keypoints;
+    match_result.query_keypoints = current_keypoints;
 }
 #endif
     
