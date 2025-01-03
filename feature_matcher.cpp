@@ -59,39 +59,84 @@ feature_matcher<cv::ORB, cv::ORB, cv::BFMatcher>::feature_matcher()
     {};
 
 template <typename Detector, typename Descriptor, typename Matcher>
-void feature_matcher<Detector, Descriptor, Matcher>::set_reference_image(
-    const std::vector<uint8_t>& data, size_t width, size_t height, PIXEL_TYPE pixel_type)
+std::vector<uint8_t> feature_matcher<Detector, Descriptor, Matcher>::swizzle(
+    const void* data, size_t width, size_t height, PIXEL_TYPE pixel_type)
 {
-    if (pixel_type != PIXEL_TYPE::RGBA)
+    size_t bpp{0};
+    switch (pixel_type)
     {
-        std::cerr << "Feature matcher: Unsupported pixel type.\n";
-        return;
+    case PIXEL_TYPE::RGBA:
+        bpp = 4;
+        break;
+    case PIXEL_TYPE::FLOAT3: // assuming packed float3
+        bpp = 3 * 4;
+        break;
     }
-
-    #define SHUFFLE
-    #ifdef SHUFFLE
-    size_t bpp = 4;
-    std::vector<uint8_t> shuffled;
-    shuffled.resize(width * height * bpp);
+    std::vector<uint8_t> swizzled;
+    swizzled.resize(width * height * bpp);
+    const auto data_u8 = reinterpret_cast<uint8_t*>(data);
     for (size_t y=0; y<height; ++y)
     {
         for (size_t x=0; x<width; ++x)
         {
-            shuffled[4 * ((height - y - 1) * width + x)    ] = data.data()[4*(y * width + x)    ];
-            shuffled[4 * ((height - y - 1) * width + x) + 1] = data.data()[4*(y * width + x) + 1];
-            shuffled[4 * ((height - y - 1) * width + x) + 2] = data.data()[4*(y * width + x) + 2];
-            shuffled[4 * ((height - y - 1) * width + x) + 3] = data.data()[4*(y * width + x) + 3];
+            for (size_t b=0; b<bpp; ++b)
+            {
+                swizzled[bpp * ((height - y - 1) * width + x) + b] = data_u8[bpp * (y * width + x) + b];
+            }
         }
     }
-    const auto pixels = reinterpret_cast<void*>(shuffled.data());
-    #else
-    const auto pixels = reinterpret_cast<void*>(data.data());
-    #endif
-
-    const auto reference_image = cv::Mat(height, width, CV_8UC4, pixels);
-    init(reference_image);
+    return std::move(swizzled);
 }
-    
+
+template <typename Detector, typename Descriptor, typename Matcher>
+void feature_matcher<Detector, Descriptor, Matcher>::set_image(
+    const void* data,
+    size_t width,
+    size_t height,
+    PIXEL_TYPE pixel_type,
+    IMAGE_TYPE image_type,
+    bool swizzle)
+{
+    const void* pixels{nullptr};
+    std::vector<uint8_t> swizzled;
+    if (swizzle)
+    {
+        swizzled = swizzle(data, width, height, pixel_type);
+        pixels = reinterpret_cast<void*>(swizzled.data());
+    } else
+    {
+        pixels = data;
+    }
+
+    switch (image_type)
+    {
+        case IMAGE_TYPE::REFERENCE:
+        {
+            assert(pixel_type == PIXEL_TYPE::RGBA);
+            const auto reference_image = cv::Mat(height, width, CV_8UC4, pixels);
+            init(reference_image);
+            break;
+        }
+        case IMAGE_TYPE::QUERY:
+        {
+            assert(pixel_type == PIXEL_TYPE::RGBA);
+            const auto query_image = cv::Mat(height, width, CV_8UC4, pixels);
+            match(query_image);
+            break;
+        }
+        case IMAGE_TYPE::DEPTH3D:
+        {
+            // making deep copy... maybe think of better interface
+            assert(pixel_type == PIXEL_TYPE::FLOAT3);
+            const auto data_float = reinterpret_cast<float*>(data);
+            depth3d_buffer = std::vector<float>(data_float, data_float + 3 * (width * height));
+            depth3d_width = width;
+            depth3d_height = height;
+            break;
+        }
+    }
+}
+
 template <typename Detector, typename Descriptor, typename Matcher>
 void feature_matcher<Detector, Descriptor, Matcher>::init(const cv::Mat& reference_image)
 {
@@ -105,42 +150,15 @@ void feature_matcher<Detector, Descriptor, Matcher>::init(const cv::Mat& referen
 }
     
 template <typename Detector, typename Descriptor, typename Matcher>
-void feature_matcher<Detector, Descriptor, Matcher>::match(
-    const std::vector<uint8_t>& data, size_t width, size_t height, PIXEL_TYPE pixel_type)
+void feature_matcher<Detector, Descriptor, Matcher>::match(const cv::Mat& query_image)
 {
-    if (pixel_type != PIXEL_TYPE::RGBA)
-    {
-        std::cerr << "Feature matcher: Unsupported pixel type.\n";
-        return;
-    }
-    //#define SHUFFLE2
-    #ifdef SHUFFLE2
-    size_t bpp = 4;
-    std::vector<uint8_t> shuffled;
-    shuffled.resize(width * height * bpp);
-    for (size_t y=0; y<height; ++y)
-    {
-        for (size_t x=0; x<width; ++x)
-        {
-            shuffled[4 * ((height - y - 1) * width + x)    ] = data.data()[4*(y * width + x)    ];
-            shuffled[4 * ((height - y - 1) * width + x) + 1] = data.data()[4*(y * width + x) + 1];
-            shuffled[4 * ((height - y - 1) * width + x) + 2] = data.data()[4*(y * width + x) + 2];
-            shuffled[4 * ((height - y - 1) * width + x) + 3] = data.data()[4*(y * width + x) + 3];
-        }
-    }
-    const auto pixels = reinterpret_cast<void*>(shuffled.data());
-    #else
-    const auto pixels = reinterpret_cast<void*>(data.data());
-    #endif
-    const auto current_image = cv::Mat(height, width, CV_8UC4, pixels);
-
     std::vector<cv::KeyPoint> current_keypoints;
     match_result = match_result_t();
 
     if (!matcher_initialized) return;
     cv::Mat current_descriptors;
-    detector->detect(current_image, current_keypoints, cv::noArray());
-    descriptor->compute(current_image, current_keypoints, current_descriptors);
+    detector->detect(query_image, current_keypoints, cv::noArray());
+    descriptor->compute(query_image, current_keypoints, current_descriptors);
     matcher->match(current_descriptors, match_result.matches, cv::noArray());
     match_result.num_ref_descriptors = reference_descriptors.size().height;
     match_result.reference_keypoints = reference_keypoints;
@@ -148,8 +166,8 @@ void feature_matcher<Detector, Descriptor, Matcher>::match(
 
     //cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
     //cv::Mat img;
-    ////cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, result.matches, img);
-    //cv::drawMatches(current_image, current_keypoints, current_image, reference_keypoints, result.matches, img);
+    ////cv::drawMatches(query_image, current_keypoints, reference_image, reference_keypoints, result.matches, img);
+    //cv::drawMatches(query_image, current_keypoints, query_image, reference_keypoints, result.matches, img);
     //cv::imshow("Display Image", img);
     //cv::waitKey(0);
 }
@@ -226,37 +244,10 @@ void feature_matcher<Detector, Descriptor, Matcher>::calibrate(size_t width, siz
 
 template <typename Detector, typename Descriptor, typename Matcher>
 bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
-        const std::vector<float>& depth,
-        const std::vector<float>& depth3D,
-        size_t width,
-        size_t height,
-        DEPTH_TYPE depth_type,
-        DEPTH_TYPE depth3D_type,
         std::array<float, 3>& eye,
         std::array<float, 3>& center,
         std::array<float, 3>& up)
 {
-    if (depth3D_type != DEPTH_TYPE::FLOAT3)
-    {
-        std::cerr << "Feature matcher: Unsupported depth type.\n";
-        return false;
-    }
-    //#define SHUFFLE3
-    #ifdef SHUFFLE3
-    std::vector<float> shuffled;
-    shuffled.resize(width * height * 3);
-    for (size_t y=0; y<height; ++y)
-        for (size_t x=0; x<width; ++x)
-        {
-            shuffled[3 * ((height - y - 1) * width + x)    ] = depth3D[3*(y * width + x)    ];
-            shuffled[3 * ((height - y - 1) * width + x) + 1] = depth3D[3*(y * width + x) + 1];
-            shuffled[3 * ((height - y - 1) * width + x) + 2] = depth3D[3*(y * width + x) + 2];
-        }
-    const auto& depth3D = shuffled;
-    #else
-    const auto& depth3D_ = depth3D;
-    #endif
-
     // calc dist eye to center for later use
     auto distance = cv::norm(cv::Point3f(eye[0], eye[1], eye[2]) - cv::Point3f(center[0], center[1], center[2]));
 
@@ -290,10 +281,12 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     for (size_t i=0; i<query_points.size(); ++i)
     {
         auto& p = query_points[i];
-        auto index = p.y * width + p.x;
-        cv::Point3f coord {depth3D_[index], depth3D_[index+1], depth3D_[index+2]};
-        if (depth[index] <= 0.f)
-        { // depth estimation returned with low contribution value
+        auto index = p.y * depth3d_width + p.x;
+        cv::Point3f coord {depth3d_buffer[index], depth3d_buffer[index+1], depth3d_buffer[index+2]};
+        cv::Point3f magicNumber{-FLT_MAX, -FLT_MAX, -FLT_MAX};
+        if (coord == magicNumber)
+        {
+            // magic value: Pixel has low contribution and should be ignored.
             continue;
         }
 //#define INV_Y
