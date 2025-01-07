@@ -59,7 +59,7 @@ feature_matcher<cv::ORB, cv::ORB, cv::BFMatcher>::feature_matcher()
     {};
 
 template <typename Detector, typename Descriptor, typename Matcher>
-std::vector<uint8_t> feature_matcher<Detector, Descriptor, Matcher>::swizzle(
+std::vector<uint8_t> feature_matcher<Detector, Descriptor, Matcher>::swizzle_image(
     const void* data, size_t width, size_t height, PIXEL_TYPE pixel_type)
 {
     size_t bpp{0};
@@ -74,7 +74,7 @@ std::vector<uint8_t> feature_matcher<Detector, Descriptor, Matcher>::swizzle(
     }
     std::vector<uint8_t> swizzled;
     swizzled.resize(width * height * bpp);
-    const auto data_u8 = reinterpret_cast<uint8_t*>(data);
+    const auto data_u8 = reinterpret_cast<const uint8_t*>(data);
     for (size_t y=0; y<height; ++y)
     {
         for (size_t x=0; x<width; ++x)
@@ -97,11 +97,12 @@ void feature_matcher<Detector, Descriptor, Matcher>::set_image(
     IMAGE_TYPE image_type,
     bool swizzle)
 {
+    return;
     const void* pixels{nullptr};
     std::vector<uint8_t> swizzled;
     if (swizzle)
     {
-        swizzled = swizzle(data, width, height, pixel_type);
+        swizzled = swizzle_image(data, width, height, pixel_type);
         pixels = reinterpret_cast<void*>(swizzled.data());
     } else
     {
@@ -113,25 +114,35 @@ void feature_matcher<Detector, Descriptor, Matcher>::set_image(
         case IMAGE_TYPE::REFERENCE:
         {
             assert(pixel_type == PIXEL_TYPE::RGBA);
-            const auto reference_image = cv::Mat(height, width, CV_8UC4, pixels);
+            reference_image_width = width;
+            reference_image_height = height;
+            const auto size = 4 * width * height;
+            const auto bytes = sizeof(uint8_t) * size;
+            reference_color_buffer = std::vector<uint8_t>(size);
+            std::memcpy(reference_color_buffer.data(), pixels, bytes);
+            const auto reference_image = cv::Mat(height, width, CV_8UC4, reference_color_buffer.data());
             init(reference_image);
             break;
         }
         case IMAGE_TYPE::QUERY:
         {
             assert(pixel_type == PIXEL_TYPE::RGBA);
-            const auto query_image = cv::Mat(height, width, CV_8UC4, pixels);
-            match(query_image);
+            query_image_width = width;
+            query_image_height = height;
+            const auto size = 4 * width * height;
+            const auto bytes = sizeof(uint8_t) * size;
+            query_color_buffer = std::vector<uint8_t>(size);
+            std::memcpy(query_color_buffer.data(), pixels, bytes);
+            query_image = cv::Mat(height, width, CV_8UC4, query_color_buffer.data());
             break;
         }
         case IMAGE_TYPE::DEPTH3D:
         {
-            // making deep copy... maybe think of better interface
             assert(pixel_type == PIXEL_TYPE::FLOAT3);
-            const auto data_float = reinterpret_cast<float*>(data);
-            depth3d_buffer = std::vector<float>(data_float, data_float + 3 * (width * height));
-            depth3d_width = width;
-            depth3d_height = height;
+            const auto size = 3 * width * height;
+            const auto bytes = sizeof(float) * size;
+            query_depth3d_buffer = std::vector<float>(size);
+            std::memcpy(query_depth3d_buffer.data(), pixels, bytes);
             break;
         }
     }
@@ -150,7 +161,7 @@ void feature_matcher<Detector, Descriptor, Matcher>::init(const cv::Mat& referen
 }
     
 template <typename Detector, typename Descriptor, typename Matcher>
-void feature_matcher<Detector, Descriptor, Matcher>::match(const cv::Mat& query_image)
+void feature_matcher<Detector, Descriptor, Matcher>::match()
 {
     std::vector<cv::KeyPoint> current_keypoints;
     match_result = match_result_t();
@@ -281,8 +292,8 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     for (size_t i=0; i<query_points.size(); ++i)
     {
         auto& p = query_points[i];
-        auto index = p.y * depth3d_width + p.x;
-        cv::Point3f coord {depth3d_buffer[index], depth3d_buffer[index+1], depth3d_buffer[index+2]};
+        auto index = p.y * query_image_width + p.x;
+        cv::Point3f coord {query_depth3d_buffer[index], query_depth3d_buffer[index+1], query_depth3d_buffer[index+2]};
         cv::Point3f magicNumber{-FLT_MAX, -FLT_MAX, -FLT_MAX};
         if (coord == magicNumber)
         {
@@ -351,7 +362,7 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     cv::Rodrigues(rotation, rotation_matrix);
 
     // camera eye
-    cv::Mat eye_cv = cv::Mat(3, 1, CV_32F, eye);
+    cv::Mat eye_cv = cv::Mat(3, 1, CV_32F, eye.data());
     cv::Mat new_eye = -1.0 * rotation_matrix.t() * translation;
 #ifdef INV_Y
     new_eye.at<float>(1) = -new_eye.at<float>(1);
@@ -397,10 +408,10 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
 #endif
     
     // camera center
-    cv::Point3f new_center = new_eye + distance * new_dir_normalized;
-    center[0] = new_center.x;
-    center[1] = new_center.y;
-    center[2] = new_center.z;
+    cv::Mat1f new_center = new_eye + distance * new_dir_normalized;
+    center[0] = new_center(0);
+    center[1] = new_center(1);
+    center[2] = new_center(2);
 
     return true;
 }

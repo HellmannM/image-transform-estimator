@@ -56,19 +56,19 @@ struct feature_matcher
     };
 
     feature_matcher();
-    void set_image(const void* data,
-                   size_t width,
-                   size_t height,
-                   PIXEL_TYPE pixel_type,
-                   IMAGE_TYPE image_type,
-                   bool swizzle);
-    void init(const cv::Mat& reference_image);
-    void match(const cv::Mat& query_image);
-    void calibrate(size_t width, size_t height, float fovy, float aspect);
-    bool update_camera(std::array<float, 3>& eye,
-                       std::array<float, 3>& center,
-                       std::array<float, 3>& up);
-    std::vector<uint8_t> swizzle(const void* data, size_t width, size_t height, PIXEL_TYPE pixel_type);
+    virtual void set_image(const void* data,
+                           size_t width,
+                           size_t height,
+                           PIXEL_TYPE pixel_type,
+                           IMAGE_TYPE image_type,
+                           bool swizzle);
+    virtual void init(const cv::Mat& reference_image);
+    virtual void match();
+    virtual void calibrate(size_t width, size_t height, float fovy, float aspect);
+    virtual bool update_camera(std::array<float, 3>& eye,
+                               std::array<float, 3>& center,
+                               std::array<float, 3>& up);
+    virtual std::vector<uint8_t> swizzle_image(const void* data, size_t width, size_t height, PIXEL_TYPE pixel_type);
 
     cv::Ptr<Detector>           detector;
     cv::Ptr<Descriptor>         descriptor;
@@ -78,9 +78,14 @@ struct feature_matcher
     cv::Mat                     camera_matrix;
     std::vector<cv::KeyPoint>   reference_keypoints;
     match_result_t              match_result;
-    std::vector<float>          depth3d_buffer;
-    size_t                      depth3d_width;
-    size_t                      depth3d_height;
+    size_t                      reference_image_width;
+    size_t                      reference_image_height;
+    size_t                      query_image_width;
+    size_t                      query_image_height;
+    std::vector<uint8_t>        reference_color_buffer;
+    std::vector<uint8_t>        query_color_buffer;
+    std::vector<float>          query_depth3d_buffer;
+    cv::Mat                     query_image;
 #if HAVE_CUDA
     cv::cuda::GpuMat            gpu_reference_descriptors;
 #endif
