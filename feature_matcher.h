@@ -40,19 +40,18 @@ namespace matcher_type
 }
 
 template <typename Detector, typename Descriptor, typename Matcher>
-struct feature_matcher
+class feature_matcher
 {
+public:
     enum PIXEL_TYPE {
-        PIXEL_TYPE_UNKNOWN = 0,
-        RGBA = 1,
-        FLOAT3 = 2
+        RGBA = 0,
+        FLOAT3 = 1
     };
 
     enum IMAGE_TYPE {
-        IMAGE_TYPE_UNKNOWN = 0,
-        REFERENCE = 1,
-        QUERY = 2,
-        DEPTH3D = 3
+        REFERENCE = 0,
+        QUERY = 1,
+        DEPTH3D = 2
     };
 
     feature_matcher();
@@ -62,19 +61,22 @@ struct feature_matcher
                            PIXEL_TYPE pixel_type,
                            IMAGE_TYPE image_type,
                            bool swizzle);
-    virtual void init(const cv::Mat& reference_image);
     virtual void match();
     virtual void calibrate(size_t width, size_t height, float fovy, float aspect);
     virtual bool update_camera(std::array<float, 3>& eye,
                                std::array<float, 3>& center,
                                std::array<float, 3>& up);
-    virtual std::vector<uint8_t> swizzle_image(const void* data, size_t width, size_t height, PIXEL_TYPE pixel_type);
+
+private:
+    void init(const cv::Mat& reference_image);
+    std::vector<uint8_t> swizzle_image(const void* data, size_t width, size_t height, PIXEL_TYPE pixel_type);
 
     cv::Ptr<Detector>           detector;
     cv::Ptr<Descriptor>         descriptor;
     cv::Ptr<Matcher>            matcher;
     bool                        matcher_initialized;
     cv::Mat                     reference_descriptors;
+    std::vector<double>         camera_matrix_data;
     cv::Mat                     camera_matrix;
     std::vector<cv::KeyPoint>   reference_keypoints;
     match_result_t              match_result;

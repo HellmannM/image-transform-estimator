@@ -50,8 +50,8 @@ struct feature_matcher
     }
 
     virtual bool update_camera(std::array<float, 3>& eye,
-                       std::array<float, 3>& center,
-                       std::array<float, 3>& up)
+                               std::array<float, 3>& center,
+                               std::array<float, 3>& up)
     {
         std::cout << "feature_matcher::update_camera"
                 << "\n\teye=[" << eye[0] << ", " << eye[1] << ", " << eye[2] << "]"

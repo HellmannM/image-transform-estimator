@@ -97,7 +97,6 @@ void feature_matcher<Detector, Descriptor, Matcher>::set_image(
     IMAGE_TYPE image_type,
     bool swizzle)
 {
-    return;
     const void* pixels{nullptr};
     std::vector<uint8_t> swizzled;
     if (swizzle)
@@ -248,9 +247,9 @@ void feature_matcher<Detector, Descriptor, Matcher>::calibrate(size_t width, siz
     double cx = ((double)width - 1) / 2.0; // (500-1)/2=249.5
     double cy = ((double)height - 1) / 2.0; // (384-1)/2=191.5
     fx = fy; //TODO doesn't like fx, works good with fy?!
-    double camera_matrix_data[] = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
+    camera_matrix_data = std::vector<double>{fx, 0, cx, 0, fy, cy, 0, 0, 1};
     // opencv stores in row-major order
-    camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
+    camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data.data());
 }
 
 template <typename Detector, typename Descriptor, typename Matcher>
@@ -362,56 +361,53 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     cv::Rodrigues(rotation, rotation_matrix);
 
     // camera eye
-    cv::Mat eye_cv = cv::Mat(3, 1, CV_32F, eye.data());
+    std::array<double, 3> e{eye[0], eye[1], eye[2]};
+    cv::Mat eye_cv = cv::Mat(3, 1, CV_64F, e.data());
     cv::Mat new_eye = -1.0 * rotation_matrix.t() * translation;
 #ifdef INV_Y
-    new_eye.at<float>(1) = -new_eye.at<float>(1);
+    new_eye.at<double>(1) = -new_eye.at<double>(1);
 #endif
 #ifdef INV_Z
-    new_eye.at<float>(2) = -new_eye.at<float>(2);
+    new_eye.at<double>(2) = -new_eye.at<double>(2);
 #endif
-    eye[0] = new_eye.at<float>(0);
-    eye[1] = new_eye.at<float>(1);
-    eye[2] = new_eye.at<float>(2);
+    eye[0] = static_cast<float>(new_eye.at<double>(0));
+    eye[1] = static_cast<float>(new_eye.at<double>(1));
+    eye[2] = static_cast<float>(new_eye.at<double>(2));
 
     // camera up
-    cv::Mat default_up = cv::Mat(3, 1, CV_32F);
-    default_up.at<float>(0) = 0.f;
-    default_up.at<float>(1) = 1.f;
-    default_up.at<float>(2) = 0.f;
+    std::array<double, 3> u{0.0, 1.0, 0.0};
+    cv::Mat default_up = cv::Mat(3, 1, CV_64F, u.data());
     cv::Mat new_up = rotation_matrix.t() * default_up;
     cv::Mat new_up_normalized;
     cv::normalize(new_up, new_up_normalized);
 #ifdef INV_Y
-    new_up_normalized.at<float>(1) = -new_up_normalized.at<float>(1);
+    new_up_normalized.at<double>(1) = -new_up_normalized.at<double>(1);
 #endif
 #ifdef INV_Z
-    new_up_normalized.at<float>(2) = -new_up_normalized.at<float>(2);
+    new_up_normalized.at<double>(2) = -new_up_normalized.at<double>(2);
 #endif
-    up[0] = new_up_normalized.at<float>(0);
-    up[1] = new_up_normalized.at<float>(1);
-    up[2] = new_up_normalized.at<float>(2);
+    up[0] = static_cast<float>(new_up_normalized.at<double>(0));
+    up[1] = static_cast<float>(new_up_normalized.at<double>(1));
+    up[2] = static_cast<float>(new_up_normalized.at<double>(2));
 
     // camera dir
-    cv::Mat default_z = cv::Mat(3, 1, CV_32F);
-    default_z.at<float>(0) = 0.f;
-    default_z.at<float>(1) = 0.f;
-    default_z.at<float>(2) = 1.f;
+    std::array<double, 3> z{0.0, 0.0, 1.0};
+    cv::Mat default_z = cv::Mat(3, 1, CV_64F);
     cv::Mat new_dir = rotation_matrix.t() * default_z;
     cv::Mat new_dir_normalized;
     cv::normalize(new_dir, new_dir_normalized);
 #ifdef INV_Y
-    new_dir_normalized.at<float>(1) = -new_dir_normalized.at<float>(1);
+    new_dir_normalized.at<double>(1) = -new_dir_normalized.at<double>(1);
 #endif
 #ifdef INV_Z
-    new_dir_normalized.at<float>(2) = -new_dir_normalized.at<float>(2);
+    new_dir_normalized.at<double>(2) = -new_dir_normalized.at<double>(2);
 #endif
     
     // camera center
-    cv::Mat1f new_center = new_eye + distance * new_dir_normalized;
-    center[0] = new_center(0);
-    center[1] = new_center(1);
-    center[2] = new_center(2);
+    cv::Mat1d new_center = new_eye + distance * new_dir_normalized;
+    center[0] = static_cast<float>(new_center(0));
+    center[1] = static_cast<float>(new_center(1));
+    center[2] = static_cast<float>(new_center(2));
 
     return true;
 }
