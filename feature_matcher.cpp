@@ -321,9 +321,9 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     // solve
     cv::Mat rotation;
     cv::Mat translation = cv::Mat(3, 1, CV_64FC1, 0.0);
-    translation.at<double>(0) = eye[0];
-    translation.at<double>(1) = eye[1];
-    translation.at<double>(2) = eye[2];
+    translation.at<double>(0) = static_cast<double>(eye[0]);
+    translation.at<double>(1) = static_cast<double>(eye[1]);
+    translation.at<double>(2) = static_cast<double>(eye[2]);
 #if 1
     cv::solvePnP(
             query_coords,
@@ -356,7 +356,7 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
             //cv::SOLVEPNP_IPPE // flags = SOLVEPNP_ITERATIVE
     );
 #endif
-    //std::cout << "rotation\n" << rotation << "\ntranslation\n" << translation << "\n";
+    std::cout << "rotation\n" << rotation << "\ntranslation\n" << translation << "\n";
     cv::Mat rotation_matrix;
     cv::Rodrigues(rotation, rotation_matrix);
 

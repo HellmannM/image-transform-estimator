@@ -22,6 +22,21 @@ struct feature_matcher
 
     feature_matcher() = default;
 
+    virtual void calibrate(size_t width, size_t height, float fovy, float aspect)
+    {
+        std::cout << "feature_matcher::calibrate:"
+                << "\n\twidth=" << width
+                << "\n\theight=" << height
+                << "\n\tfovy=" << fovy
+                << "\n\taspect=" << aspect
+                << std::endl;
+    }
+
+    virtual void match()
+    {
+        std::cout << "feature_matcher::match" << std::endl;
+    }
+
     virtual void set_image(const void* data,
                    size_t width,
                    size_t height,
@@ -39,31 +54,16 @@ struct feature_matcher
                 << std::endl;
     }
 
-    virtual void calibrate(size_t width, size_t height, float fovy, float aspect)
-    {
-        std::cout << "feature_matcher::calibrate"
-                << "\n\twidth=" << width
-                << "\n\theight=" << height
-                << "\n\tfovy=" << fovy
-                << "\n\taspect=" << aspect
-                << std::endl;
-    }
-
     virtual bool update_camera(std::array<float, 3>& eye,
                                std::array<float, 3>& center,
                                std::array<float, 3>& up)
     {
-        std::cout << "feature_matcher::update_camera"
+        std::cout << "feature_matcher::update_camera:"
                 << "\n\teye=[" << eye[0] << ", " << eye[1] << ", " << eye[2] << "]"
                 << "\n\tcenter=[" << center[0] << ", " << center[1] << ", " << center[2] << "]"
                 << "\n\teye=[" << up[0] << ", " << up[1] << ", " << up[2] << "]"
                 << std::endl;
         return true;
-    }
-
-    virtual void match()
-    {
-        std::cout << "feature_matcher::match" << std::endl;
     }
 };
 

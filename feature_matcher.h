@@ -55,14 +55,14 @@ public:
     };
 
     feature_matcher();
+    virtual void calibrate(size_t width, size_t height, float fovy, float aspect);
+    virtual void match();
     virtual void set_image(const void* data,
                            size_t width,
                            size_t height,
                            PIXEL_TYPE pixel_type,
                            IMAGE_TYPE image_type,
                            bool swizzle);
-    virtual void match();
-    virtual void calibrate(size_t width, size_t height, float fovy, float aspect);
     virtual bool update_camera(std::array<float, 3>& eye,
                                std::array<float, 3>& center,
                                std::array<float, 3>& up);
