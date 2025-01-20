@@ -1,4 +1,6 @@
 #include <array>
+#include <cmath>
+#include <exception>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -176,8 +178,8 @@ void feature_matcher<Detector, Descriptor, Matcher>::match()
 
     //cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
     //cv::Mat img;
-    ////cv::drawMatches(query_image, current_keypoints, reference_image, reference_keypoints, result.matches, img);
-    //cv::drawMatches(query_image, current_keypoints, query_image, reference_keypoints, result.matches, img);
+    ////cv::drawMatches(query_image, current_keypoints, reference_image, reference_keypoints, match_result.matches, img);
+    //cv::drawMatches(query_image, current_keypoints, query_image, reference_keypoints, match_result.matches, img);
     //cv::imshow("Display Image", img);
     //cv::waitKey(0);
 }
@@ -291,7 +293,7 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     for (size_t i=0; i<query_points.size(); ++i)
     {
         auto& p = query_points[i];
-        auto index = p.y * query_image_width + p.x;
+        auto index = 3 * (std::llround(p.y) * query_image_width + std::llround(p.x));
         cv::Point3f coord {query_depth3d_buffer[index], query_depth3d_buffer[index+1], query_depth3d_buffer[index+2]};
         cv::Point3f magicNumber{-FLT_MAX, -FLT_MAX, -FLT_MAX};
         if (coord == magicNumber)
@@ -319,43 +321,52 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     }
 
     // solve
-    cv::Mat rotation;
+    cv::Mat rotation = cv::Mat(3, 1, CV_64FC1, 0.0);
     cv::Mat translation = cv::Mat(3, 1, CV_64FC1, 0.0);
     translation.at<double>(0) = static_cast<double>(eye[0]);
     translation.at<double>(1) = static_cast<double>(eye[1]);
     translation.at<double>(2) = static_cast<double>(eye[2]);
+    try
+    {
 #if 1
-    cv::solvePnP(
-            query_coords,
-            reference_points_filtered,
-            camera_matrix,
-            std::vector<double>(), // distCoeffs
-            rotation,
-            translation,
-            false, // useExtrinsicGuess = false
-    	    cv::SOLVEPNP_ITERATIVE
-    	    //cv::SOLVEPNP_P3P
-    	    //cv::SOLVEPNP_AP3P
-    	    //cv::SOLVEPNP_SQPNP
-    	    //cv::SOLVEPNP_EPNP
-    );
+        cv::solvePnP(
+                query_coords,
+                reference_points_filtered,
+                camera_matrix,
+                std::vector<double>(), // distCoeffs
+                rotation,
+                translation,
+                false, // useExtrinsicGuess = false
+                cv::SOLVEPNP_ITERATIVE
+                //cv::SOLVEPNP_P3P
+                //cv::SOLVEPNP_AP3P
+                //cv::SOLVEPNP_SQPNP
+                //cv::SOLVEPNP_EPNP
+        );
 #else
-    cv::solvePnPRansac(
-            query_coords,
-            reference_points_filtered,
-            camera_matrix,
-            std::vector<double>(), // distCoeffs
-            rotation,
-            translation,
-            false, // useExtrinsicGuess = false
-            1000, // iterationsCount = 100
-            0.8, // reprojectionError = 8.0
-            0.6, // confidence = 0.99,
-            cv::noArray(), // inliers = noArray(),
-            cv::SOLVEPNP_ITERATIVE
-            //cv::SOLVEPNP_IPPE // flags = SOLVEPNP_ITERATIVE
-    );
+        cv::solvePnPRansac(
+                query_coords,
+                reference_points_filtered,
+                camera_matrix,
+                std::vector<double>(), // distCoeffs
+                rotation,
+                translation,
+                false, // useExtrinsicGuess = false
+                1000, // iterationsCount = 100
+                0.8, // reprojectionError = 8.0
+                0.6, // confidence = 0.99,
+                cv::noArray(), // inliers = noArray(),
+                cv::SOLVEPNP_ITERATIVE
+                //cv::SOLVEPNP_IPPE // flags = SOLVEPNP_ITERATIVE
+        );
 #endif
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << "Error in solvePnP:\n" << e.what() << std::endl;
+        return false;
+    }
+
     std::cout << "rotation\n" << rotation << "\ntranslation\n" << translation << "\n";
     cv::Mat rotation_matrix;
     cv::Rodrigues(rotation, rotation_matrix);
@@ -392,7 +403,7 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
 
     // camera dir
     std::array<double, 3> z{0.0, 0.0, 1.0};
-    cv::Mat default_z = cv::Mat(3, 1, CV_64F);
+    cv::Mat default_z = cv::Mat(3, 1, CV_64F, z.data());
     cv::Mat new_dir = rotation_matrix.t() * default_z;
     cv::Mat new_dir_normalized;
     cv::normalize(new_dir, new_dir_normalized);
