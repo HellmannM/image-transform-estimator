@@ -243,15 +243,14 @@ void feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>:
 template <typename Detector, typename Descriptor, typename Matcher>
 void feature_matcher<Detector, Descriptor, Matcher>::calibrate(size_t width, size_t height, float fovy, float aspect)
 {
-    double fx = 0.5 * ((double)width - 1) / std::tan(0.5 * fovy * aspect); // fx=444.661
-    double fy = 0.5 * ((double)height - 1) / std::tan(0.5 * fovy); // fy=462.322
-    //TODO fy seems to be slightly off...
-    fy *= 1.002612;
-    double cx = ((double)width - 1) / 2.0; // (500-1)/2=249.5
-    double cy = ((double)height - 1) / 2.0; // (384-1)/2=191.5
-    fx = fy; //TODO doesn't like fx, works good with fy?!
+    double fx = 0.5 * ((double)width - 1) / std::tan(0.5 * fovy * aspect);
+    double fy = 0.5 * ((double)height - 1) / std::tan(0.5 * fovy);
+    //TODO values are off quite a bit...
+    fx *= 1.162;
+    fy *= 1.138;
+    double cx = ((double)width - 1) / 2.0;
+    double cy = ((double)height - 1) / 2.0;
     camera_matrix_data = std::vector<double>{fx, 0, cx, 0, fy, cy, 0, 0, 1};
-    // opencv stores in row-major order
     camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data.data());
 }
 
@@ -309,9 +308,6 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     // solve
     cv::Mat rotation = cv::Mat(3, 1, CV_64FC1, 0.0);
     cv::Mat translation = cv::Mat(3, 1, CV_64FC1, 0.0);
-    translation.at<double>(0) = static_cast<double>(eye[0]);
-    translation.at<double>(1) = static_cast<double>(eye[1]);
-    translation.at<double>(2) = static_cast<double>(eye[2]);
     try
     {
 //#define USE_RANSAC
