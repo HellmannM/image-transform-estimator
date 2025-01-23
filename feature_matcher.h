@@ -70,6 +70,9 @@ public:
 private:
     void init(const cv::Mat& reference_image);
     std::vector<uint8_t> swizzle_image(const void* data, size_t width, size_t height, PIXEL_TYPE pixel_type);
+    std::string make_cam_string(std::array<float, 3>& eye,
+                                std::array<float, 3>& center,
+                                std::array<float, 3>& up);
 
     cv::Ptr<Detector>           detector;
     cv::Ptr<Descriptor>         descriptor;
@@ -88,6 +91,7 @@ private:
     std::vector<uint8_t>        query_color_buffer;
     std::vector<float>          query_depth3d_buffer;
     cv::Mat                     query_image;
+    cv::Mat                     reference_image;
 #if HAVE_CUDA
     cv::cuda::GpuMat            gpu_reference_descriptors;
 #endif

@@ -121,7 +121,8 @@ void feature_matcher<Detector, Descriptor, Matcher>::set_image(
             const auto bytes = sizeof(uint8_t) * size;
             reference_color_buffer = std::vector<uint8_t>(size);
             std::memcpy(reference_color_buffer.data(), pixels, bytes);
-            const auto reference_image = cv::Mat(height, width, CV_8UC4, reference_color_buffer.data());
+            //const auto reference_image = cv::Mat(height, width, CV_8UC4, reference_color_buffer.data());
+            reference_image = cv::Mat(height, width, CV_8UC4, reference_color_buffer.data());
             init(reference_image);
             break;
         }
@@ -178,8 +179,8 @@ void feature_matcher<Detector, Descriptor, Matcher>::match()
 
     //cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
     //cv::Mat img;
-    ////cv::drawMatches(query_image, current_keypoints, reference_image, reference_keypoints, match_result.matches, img);
-    //cv::drawMatches(query_image, current_keypoints, query_image, reference_keypoints, match_result.matches, img);
+    //cv::drawMatches(query_image, current_keypoints, reference_image, reference_keypoints, match_result.matches, img);
+    ////cv::drawMatches(query_image, current_keypoints, query_image, reference_keypoints, match_result.matches, img);
     //cv::imshow("Display Image", img);
     //cv::waitKey(0);
 }
@@ -260,27 +261,16 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
         std::array<float, 3>& center,
         std::array<float, 3>& up)
 {
+    std::cout << "old camera:\n" << make_cam_string(eye, center, up) << "\n";
+
     // calc dist eye to center for later use
     auto distance = cv::norm(cv::Point3f(eye[0], eye[1], eye[2]) - cv::Point3f(center[0], center[1], center[2]));
 
     auto good_matches = match_result.good_matches(50.f);
-    std::cout << good_matches.size() << " good matches\n";
-    constexpr size_t min_good_matches {6};
-    if (good_matches.size() < min_good_matches)
-    {
-        std::cerr << "ERROR: found only " << good_matches.size()
-                  << " good matches (minimum is " << min_good_matches
-                  << "). Aborting search...\n";
-        return false;
-    }
     std::sort(good_matches.begin(), good_matches.end(),
               [](const cv::DMatch& lhs, const cv::DMatch& rhs){return lhs.distance < rhs.distance;});
     std::vector<cv::Point2f> reference_points;
     std::vector<cv::Point2f> query_points;
-    constexpr size_t num_points_for_solvepnp {min_good_matches};
-    //TODO took only num_points_for_solvepnp best points. Do filtering after depth estimation?
-    //taking all for now
-    //for (size_t i=0; i<std::min(num_points_for_solvepnp, good_matches.size()); ++i)
     for (size_t i=0; i<good_matches.size(); ++i)
     {
         reference_points.push_back(match_result.reference_keypoints[good_matches[i].trainIdx].pt);
@@ -296,29 +286,25 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
         auto index = 3 * (std::llround(p.y) * query_image_width + std::llround(p.x));
         cv::Point3f coord {query_depth3d_buffer[index], query_depth3d_buffer[index+1], query_depth3d_buffer[index+2]};
         cv::Point3f magicNumber{-FLT_MAX, -FLT_MAX, -FLT_MAX};
-        if (coord == magicNumber)
-        {
-            // magic value: Pixel has low contribution and should be ignored.
+        if (coord == magicNumber) // magic value: Pixel has low contribution and should be ignored.
             continue;
-        }
-//#define INV_Y
-#define INV_Z
-#ifdef INV_Y
-        coord.y = -coord.y;
-#endif
-#ifdef INV_Z
-        coord.z = -coord.z;
-#endif
+        coord.z = -coord.z; // inv z-axis
         query_coords.push_back(coord);
         reference_points_filtered.push_back(reference_points[i]);
     }
 
-    if (query_coords.size() < num_points_for_solvepnp)
-    {
-        std::cerr << "ERROR: found only " << query_coords.size()
-                  << " suitable coords. Aborting...\n";
+    std::cout << "Matches: " << match_result.matches.size() << "\n"
+              << "Good matches: " << good_matches.size() << "\n"
+              << "Usable coords: " << query_coords.size() << "\n";
+
+    constexpr size_t min_points_for_solvepnp{6};
+    if (query_coords.size() < min_points_for_solvepnp)
         return false;
-    }
+//#define SOLVEPNP_USE_ONLY_MIN_POINTS_FOR_SOLVEPNP
+#ifdef SOLVEPNP_USE_ONLY_MIN_POINTS_FOR_SOLVEPNP
+    query_coords.resize(6);
+    reference_points_filtered.resize(6);
+#endif
 
     // solve
     cv::Mat rotation = cv::Mat(3, 1, CV_64FC1, 0.0);
@@ -328,7 +314,8 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     translation.at<double>(2) = static_cast<double>(eye[2]);
     try
     {
-#if 1
+//#define USE_RANSAC
+#ifndef USE_RANSAC
         cv::solvePnP(
                 query_coords,
                 reference_points_filtered,
@@ -370,17 +357,13 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     std::cout << "rotation\n" << rotation << "\ntranslation\n" << translation << "\n";
     cv::Mat rotation_matrix;
     cv::Rodrigues(rotation, rotation_matrix);
+    std::cout << "rotation_matrix\n" << rotation_matrix << "\n";
 
     // camera eye
     std::array<double, 3> e{eye[0], eye[1], eye[2]};
     cv::Mat eye_cv = cv::Mat(3, 1, CV_64F, e.data());
     cv::Mat new_eye = -1.0 * rotation_matrix.t() * translation;
-#ifdef INV_Y
-    new_eye.at<double>(1) = -new_eye.at<double>(1);
-#endif
-#ifdef INV_Z
-    new_eye.at<double>(2) = -new_eye.at<double>(2);
-#endif
+    new_eye.at<double>(2) = -new_eye.at<double>(2); // inv z-axis
     eye[0] = static_cast<float>(new_eye.at<double>(0));
     eye[1] = static_cast<float>(new_eye.at<double>(1));
     eye[2] = static_cast<float>(new_eye.at<double>(2));
@@ -391,12 +374,7 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     cv::Mat new_up = rotation_matrix.t() * default_up;
     cv::Mat new_up_normalized;
     cv::normalize(new_up, new_up_normalized);
-#ifdef INV_Y
-    new_up_normalized.at<double>(1) = -new_up_normalized.at<double>(1);
-#endif
-#ifdef INV_Z
-    new_up_normalized.at<double>(2) = -new_up_normalized.at<double>(2);
-#endif
+    new_up_normalized.at<double>(2) = -new_up_normalized.at<double>(2); // inv z-axis
     up[0] = static_cast<float>(new_up_normalized.at<double>(0));
     up[1] = static_cast<float>(new_up_normalized.at<double>(1));
     up[2] = static_cast<float>(new_up_normalized.at<double>(2));
@@ -407,12 +385,7 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     cv::Mat new_dir = rotation_matrix.t() * default_z;
     cv::Mat new_dir_normalized;
     cv::normalize(new_dir, new_dir_normalized);
-#ifdef INV_Y
-    new_dir_normalized.at<double>(1) = -new_dir_normalized.at<double>(1);
-#endif
-#ifdef INV_Z
-    new_dir_normalized.at<double>(2) = -new_dir_normalized.at<double>(2);
-#endif
+    new_dir_normalized.at<double>(2) = -new_dir_normalized.at<double>(2); // inv z-axis
     
     // camera center
     cv::Mat1d new_center = new_eye + distance * new_dir_normalized;
@@ -420,5 +393,20 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     center[1] = static_cast<float>(new_center(1));
     center[2] = static_cast<float>(new_center(2));
 
+    std::cout << "new camera:\n" << make_cam_string(eye, center, up) << "\n";
+
     return true;
+}
+
+template <typename Detector, typename Descriptor, typename Matcher>
+std::string feature_matcher<Detector, Descriptor, Matcher>::make_cam_string(
+        std::array<float, 3>& eye,
+        std::array<float, 3>& center,
+        std::array<float, 3>& up)
+{
+    std::stringstream ss;
+    ss << "\teye=(" << eye[0] << ", " << eye[1] << ", " << eye[2] << ")"
+       << "\n\tcenter=(" << center[0] << ", " << center[1] << ", " << center[2] << ")"
+       << "\n\tup=(" << up[0] << ", " << up[1] << ", " << up[2] << ")";
+    return ss.str();
 }
