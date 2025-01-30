@@ -243,14 +243,11 @@ void feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>:
 template <typename Detector, typename Descriptor, typename Matcher>
 void feature_matcher<Detector, Descriptor, Matcher>::calibrate(size_t width, size_t height, float fovy, float aspect)
 {
-    double fx = 0.5 * ((double)width - 1) / std::tan(0.5 * fovy * aspect);
-    double fy = 0.5 * ((double)height - 1) / std::tan(0.5 * fovy);
-    //TODO values are off quite a bit...
-    fx *= 1.162;
-    fy *= 1.138;
-    double cx = ((double)width - 1) / 2.0;
-    double cy = ((double)height - 1) / 2.0;
-    camera_matrix_data = std::vector<double>{fx, 0, cx, 0, fy, cy, 0, 0, 1};
+    double fy = 0.5 * height / std::tan(0.5 * fovy);
+    fy *= 1.138; //TODO I don't understand why this is off....
+    double cx = (width - 1) / 2.0;
+    double cy = (height - 1) / 2.0;
+    camera_matrix_data = std::vector<double>{fy, 0, cx, 0, fy, cy, 0, 0, 1};
     camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data.data());
 }
 
@@ -350,10 +347,8 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
         return false;
     }
 
-    std::cout << "rotation\n" << rotation << "\ntranslation\n" << translation << "\n";
     cv::Mat rotation_matrix;
     cv::Rodrigues(rotation, rotation_matrix);
-    std::cout << "rotation_matrix\n" << rotation_matrix << "\n";
 
     // camera eye
     std::array<double, 3> e{eye[0], eye[1], eye[2]};
