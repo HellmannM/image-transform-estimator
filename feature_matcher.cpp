@@ -244,7 +244,6 @@ template <typename Detector, typename Descriptor, typename Matcher>
 void feature_matcher<Detector, Descriptor, Matcher>::calibrate(size_t width, size_t height, float fovy, float aspect)
 {
     double fy = 0.5 * height / std::tan(0.5 * fovy);
-    fy *= 1.138; //TODO I don't understand why this is off....
     double cx = (width - 1) / 2.0;
     double cy = (height - 1) / 2.0;
     camera_matrix_data = std::vector<double>{fy, 0, cx, 0, fy, cy, 0, 0, 1};
