@@ -67,12 +67,19 @@ std::vector<uint8_t> feature_matcher<Detector, Descriptor, Matcher>::swizzle_ima
     size_t bpp{0};
     switch (pixel_type)
     {
+    case PIXEL_TYPE::RGB:
+        bpp = 3;
+        break;
     case PIXEL_TYPE::RGBA:
         bpp = 4;
         break;
     case PIXEL_TYPE::FLOAT3: // assuming packed float3
         bpp = 3 * 4;
         break;
+    default:
+        std::cerr << "Error in feature_matcher: Unsupported pixel type.\n";
+        assert(false);
+        return{};
     }
     std::vector<uint8_t> swizzled;
     swizzled.resize(width * height * bpp);
@@ -83,7 +90,9 @@ std::vector<uint8_t> feature_matcher<Detector, Descriptor, Matcher>::swizzle_ima
         {
             for (size_t b=0; b<bpp; ++b)
             {
-                swizzled[bpp * ((height - y - 1) * width + x) + b] = data_u8[bpp * (y * width + x) + b];
+                auto yy = height - y - 1;
+                auto xx = width - x - 1;
+                swizzled[bpp * (yy * width + xx) + b] = data_u8[bpp * (y * width + x) + b];
             }
         }
     }
@@ -108,6 +117,25 @@ void feature_matcher<Detector, Descriptor, Matcher>::set_image(
     } else
     {
         pixels = data;
+    }
+
+    std::vector<uint8_t> remapped;
+    if (pixel_type == PIXEL_TYPE::RGB)
+    {
+        remapped.resize(width * height * 4);
+        for (size_t y=0; y<height; ++y)
+        {
+            for (size_t x=0; x<width; ++x)
+            {
+                size_t i = (y * width + x);
+                remapped[4 * i    ] = reinterpret_cast<const uint8_t*>(pixels)[3 * i    ];
+                remapped[4 * i + 1] = reinterpret_cast<const uint8_t*>(pixels)[3 * i + 1];
+                remapped[4 * i + 2] = reinterpret_cast<const uint8_t*>(pixels)[3 * i + 2];
+                remapped[4 * i + 3] = 255;
+            }
+        }
+        pixels = reinterpret_cast<void*>(remapped.data());
+        pixel_type = PIXEL_TYPE::RGBA;
     }
 
     switch (image_type)
