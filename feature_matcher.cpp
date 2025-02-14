@@ -67,10 +67,13 @@ std::vector<uint8_t> feature_matcher<Detector, Descriptor, Matcher>::swizzle_ima
     size_t bpp{0};
     switch (pixel_type)
     {
-    case PIXEL_TYPE::RGB:
+    case PIXEL_TYPE::R8:
+        bpp = 1;
+        break;
+    case PIXEL_TYPE::RGB8:
         bpp = 3;
         break;
-    case PIXEL_TYPE::RGBA:
+    case PIXEL_TYPE::RGBA8:
         bpp = 4;
         break;
     case PIXEL_TYPE::FLOAT3: // assuming packed float3
@@ -120,7 +123,24 @@ void feature_matcher<Detector, Descriptor, Matcher>::set_image(
     }
 
     std::vector<uint8_t> remapped;
-    if (pixel_type == PIXEL_TYPE::RGB)
+    if (pixel_type == PIXEL_TYPE::R8)
+    {
+        remapped.resize(width * height * 4);
+        for (size_t y=0; y<height; ++y)
+        {
+            for (size_t x=0; x<width; ++x)
+            {
+                size_t i = (y * width + x);
+                remapped[4 * i    ] = reinterpret_cast<const uint8_t*>(pixels)[i];
+                remapped[4 * i + 1] = reinterpret_cast<const uint8_t*>(pixels)[i];
+                remapped[4 * i + 2] = reinterpret_cast<const uint8_t*>(pixels)[i];
+                remapped[4 * i + 3] = 255;
+            }
+        }
+        pixels = reinterpret_cast<void*>(remapped.data());
+        pixel_type = PIXEL_TYPE::RGBA8;
+    }
+    else if (pixel_type == PIXEL_TYPE::RGB8)
     {
         remapped.resize(width * height * 4);
         for (size_t y=0; y<height; ++y)
@@ -135,14 +155,14 @@ void feature_matcher<Detector, Descriptor, Matcher>::set_image(
             }
         }
         pixels = reinterpret_cast<void*>(remapped.data());
-        pixel_type = PIXEL_TYPE::RGBA;
+        pixel_type = PIXEL_TYPE::RGBA8;
     }
 
     switch (image_type)
     {
         case IMAGE_TYPE::REFERENCE:
         {
-            assert(pixel_type == PIXEL_TYPE::RGBA);
+            assert(pixel_type == PIXEL_TYPE::RGBA8);
             reference_image_width = width;
             reference_image_height = height;
             const auto size = 4 * width * height;
@@ -156,7 +176,7 @@ void feature_matcher<Detector, Descriptor, Matcher>::set_image(
         }
         case IMAGE_TYPE::QUERY:
         {
-            assert(pixel_type == PIXEL_TYPE::RGBA);
+            assert(pixel_type == PIXEL_TYPE::RGBA8);
             query_image_width = width;
             query_image_height = height;
             const auto size = 4 * width * height;
