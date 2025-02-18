@@ -68,6 +68,7 @@ public:
     virtual bool update_camera(std::array<float, 3>& eye,
                                std::array<float, 3>& center,
                                std::array<float, 3>& up);
+    virtual void set_good_match_threshold(float threshold);
 
 private:
     void init(const cv::Mat& reference_image);
@@ -75,7 +76,6 @@ private:
     std::string make_cam_string(std::array<float, 3>& eye,
                                 std::array<float, 3>& center,
                                 std::array<float, 3>& up);
-    float good_match_threshold();
 
     cv::Ptr<Detector>           detector;
     cv::Ptr<Descriptor>         descriptor;
@@ -98,5 +98,6 @@ private:
 #if HAVE_CUDA
     cv::cuda::GpuMat            gpu_reference_descriptors;
 #endif
+    float                       good_match_threshold;
 };
 
