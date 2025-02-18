@@ -75,6 +75,7 @@ private:
     std::string make_cam_string(std::array<float, 3>& eye,
                                 std::array<float, 3>& center,
                                 std::array<float, 3>& up);
+    float good_match_threshold();
 
     cv::Ptr<Detector>           detector;
     cv::Ptr<Descriptor>         descriptor;

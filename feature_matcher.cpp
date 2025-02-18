@@ -309,7 +309,7 @@ bool feature_matcher<Detector, Descriptor, Matcher>::update_camera(
     // calc dist eye to center for later use
     auto distance = cv::norm(cv::Point3f(eye[0], eye[1], eye[2]) - cv::Point3f(center[0], center[1], center[2]));
 
-    auto good_matches = match_result.good_matches(50.f);
+    auto good_matches = match_result.good_matches(good_match_threshold());
     std::sort(good_matches.begin(), good_matches.end(),
               [](const cv::DMatch& lhs, const cv::DMatch& rhs){return lhs.distance < rhs.distance;});
     std::vector<cv::Point2f> reference_points;
@@ -447,4 +447,24 @@ std::string feature_matcher<Detector, Descriptor, Matcher>::make_cam_string(
        << "\n\tcenter=(" << center[0] << ", " << center[1] << ", " << center[2] << ")"
        << "\n\tup=(" << up[0] << ", " << up[1] << ", " << up[2] << ")";
     return ss.str();
+}
+
+template <typename Detector, typename Descriptor, typename Matcher>
+float feature_matcher<Detector, Descriptor, Matcher>::good_match_threshold()
+{
+    std::cerr << "Error in " << __func__
+        << "good_match_threshold not implemented for detector/descriptor combination.\n";
+    return 0.f;
+}
+
+template <>
+float feature_matcher<cv::ORB, cv::ORB, cv::BFMatcher>::good_match_threshold()
+{
+    return 50.f;
+}
+
+template <>
+float feature_matcher<cv::xfeatures2d::SURF, cv::SIFT, cv::BFMatcher>::good_match_threshold()
+{
+    return 100.f;
 }
