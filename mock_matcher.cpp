@@ -4,22 +4,22 @@
 template class feature_matcher<int, int, int>;
 
 extern "C" {
-    matcher_t* create_matcher()
+    image_transform_estimator* create_estimator()
     {
-        return new matcher_t();
+        return dynamic_cast<image_transform_estimator*>(new matcher_t());
     }
 
-    void destroy_matcher(matcher_t* matcher)
+    void destroy_estimator(image_transform_estimator* estimator)
     {
-        delete matcher;
+        delete dynamic_cast<image_transform_estimator*>(estimator);
     }
 
-    const char* get_matcher_type()
+    const char* get_estimator_type()
     {
         return "TEST";
     }
 
-    const char* get_matcher_description()
+    const char* get_estimator_description()
     {
         return "Detector: int, Descriptor: int, Matcher: int";
     }

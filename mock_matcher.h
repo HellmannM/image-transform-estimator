@@ -4,25 +4,14 @@
 #include <cstdint>
 #include <iostream>
 
+#include "image_transform_estimator.h"
+
 template <typename Detector, typename Descriptor, typename Matcher>
-struct feature_matcher
+struct feature_matcher : public image_transform_estimator
 {
-    enum PIXEL_TYPE {
-        PIXEL_TYPE_UNKNOWN = 0,
-        RGBA = 1,
-        FLOAT3 = 2
-    };
-
-    enum IMAGE_TYPE {
-        IMAGE_TYPE_UNKNOWN = 0,
-        REFERENCE = 1,
-        QUERY = 2,
-        DEPTH3D = 3
-    };
-
     feature_matcher() = default;
 
-    virtual void calibrate(size_t width, size_t height, float fovy, float aspect)
+    virtual void calibrate(size_t width, size_t height, float fovy, float aspect) override
     {
         std::cout << "feature_matcher::calibrate:"
                 << "\n\twidth=" << width
@@ -32,7 +21,7 @@ struct feature_matcher
                 << std::endl;
     }
 
-    virtual void match()
+    virtual void match() override
     {
         std::cout << "feature_matcher::match" << std::endl;
     }
@@ -42,7 +31,7 @@ struct feature_matcher
                    size_t height,
                    PIXEL_TYPE pixel_type,
                    IMAGE_TYPE image_type,
-                   bool swizzle)
+                   bool swizzle) override
     {
         std::cout << "feature_matcher::set_image:"
                 << "\n\tdata=" << data
@@ -56,7 +45,7 @@ struct feature_matcher
 
     virtual bool update_camera(std::array<float, 3>& eye,
                                std::array<float, 3>& center,
-                               std::array<float, 3>& up)
+                               std::array<float, 3>& up) override
     {
         std::cout << "feature_matcher::update_camera:"
                 << "\n\teye=[" << eye[0] << ", " << eye[1] << ", " << eye[2] << "]"
@@ -65,13 +54,18 @@ struct feature_matcher
                 << std::endl;
         return true;
     }
+
+    virtual void set_good_match_threshold(float threshold) override
+    {
+        std::cout << "feature_matcher::set_good_match_threshold: " << threshold << "\n";
+    }
 };
 
 typedef feature_matcher<int, int, int> matcher_t;
 
 extern "C" {
-    matcher_t* create_matcher();
-    void destroy_matcher(matcher_t* matcher);
-    const char* get_matcher_type();
-    const char* get_matcher_description();
+    image_transform_estimator* create_estimator();
+    void destroy_estimator(image_transform_estimator* estimator);
+    const char* get_estimator_type();
+    const char* get_estimator_description();
 }

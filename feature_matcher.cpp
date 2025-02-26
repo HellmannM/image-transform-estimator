@@ -20,6 +20,9 @@
 #include "feature_matcher.h"
 
 
+//using PIXEL_TYPE = image_transform_estimator::PIXEL_TYPE;
+//using IMAGE_TYPE = image_transform_estimator::IMAGE_TYPE;
+
 template <typename Detector, typename Descriptor, typename Matcher>
 feature_matcher<Detector, Descriptor, Matcher>::feature_matcher()
     : detector(Detector::create())
