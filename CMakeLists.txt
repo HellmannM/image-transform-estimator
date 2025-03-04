@@ -7,9 +7,10 @@ set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 set(SUBPROJECT_NAME feature-matcher)
+set(TARGET_MOCK "${SUBPROJECT_NAME}-mock")
 set(TARGET_ORB "${SUBPROJECT_NAME}-orb")
 set(TARGET_SURF "${SUBPROJECT_NAME}-surf")
-set(TARGET_MOCK "${SUBPROJECT_NAME}-mock")
+set(TARGET_ECC "${SUBPROJECT_NAME}-ecc")
 set(TARGET_CUDA "${SUBPROJECT_NAME}-cuda")
 project(${SUBPROJECT_NAME} LANGUAGES CXX)
 
@@ -30,19 +31,26 @@ endif()
 
 #--------------------------------------------------------------------------------------------------
 
+add_library(${TARGET_MOCK} SHARED)
 add_library(${TARGET_ORB} SHARED)
 add_library(${TARGET_SURF} SHARED)
-add_library(${TARGET_MOCK} SHARED)
+add_library(${TARGET_ECC} SHARED)
+set_property(TARGET ${TARGET_MOCK} PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET ${TARGET_ORB} PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET ${TARGET_SURF} PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_property(TARGET ${TARGET_MOCK} PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_property(TARGET ${TARGET_ECC} PROPERTY POSITION_INDEPENDENT_CODE ON)
 if (cuda)
   add_library(${TARGET_CUDA} SHARED)
 endif()
 
 set(SOURCES
+    ecc.cpp
     feature_matcher.cpp
     match_result.cpp
+)
+
+set(SOURCES_MOCK
+    mock_matcher.cpp
 )
 
 set(SOURCES_ORB
@@ -55,8 +63,9 @@ set(SOURCES_SURF
     surf_matcher.cpp
 )
 
-set(SOURCES_MOCK
-    mock_matcher.cpp
+set(SOURCES_ECC
+    ${SOURCES}
+    cte_ecc.cpp
 )
 
 set(CUDA_SOURCES
@@ -65,14 +74,19 @@ set(CUDA_SOURCES
     #cuda_matcher.cu
 )
 
+target_sources(${TARGET_MOCK} PRIVATE ${SOURCES_MOCK})
 target_sources(${TARGET_ORB} PRIVATE ${SOURCES_ORB})
 target_sources(${TARGET_SURF} PRIVATE ${SOURCES_SURF})
-target_sources(${TARGET_MOCK} PRIVATE ${SOURCES_MOCK})
+target_sources(${TARGET_ECC} PRIVATE ${SOURCES_ECC})
 
+target_link_libraries(${TARGET_MOCK})
 target_link_libraries(${TARGET_ORB} ${OpenCV_LIBS})
 target_link_libraries(${TARGET_SURF} ${OpenCV_LIBS})
-target_link_libraries(${TARGET_MOCK})
+target_link_libraries(${TARGET_ECC} ${OpenCV_LIBS})
 
+target_include_directories(${TARGET_MOCK} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+)
 target_include_directories(${TARGET_ORB} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   ${OpenCV_INCLUDE_DIRS}
@@ -81,8 +95,9 @@ target_include_directories(${TARGET_SURF} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   ${OpenCV_INCLUDE_DIRS}
 )
-target_include_directories(${TARGET_MOCK} PUBLIC
+target_include_directories(${TARGET_ECC} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 if (cuda)

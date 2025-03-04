@@ -78,10 +78,11 @@ std::vector<uint8_t> feature_matcher<Detector, Descriptor, Matcher>::swizzle_ima
     case PIXEL_TYPE::RGB8:
         bpp = 3;
         break;
+    case PIXEL_TYPE::F32:
     case PIXEL_TYPE::RGBA8:
         bpp = 4;
         break;
-    case PIXEL_TYPE::FLOAT3: // assuming packed float3
+    case PIXEL_TYPE::F32X3: // assuming packed float3
         bpp = 3 * 4;
         break;
     default:
@@ -193,7 +194,7 @@ void feature_matcher<Detector, Descriptor, Matcher>::set_image(
         }
         case IMAGE_TYPE::DEPTH3D:
         {
-            assert(pixel_type == PIXEL_TYPE::FLOAT3);
+            assert(pixel_type == PIXEL_TYPE::F32X3);
             const auto size = 3 * width * height;
             const auto bytes = sizeof(float) * size;
             query_depth3d_buffer = std::vector<float>(size);

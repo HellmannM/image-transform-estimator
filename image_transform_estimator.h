@@ -13,7 +13,8 @@ struct image_transform_estimator
     RGBA8 = 0,
     RGB8 = 1,
     R8 = 2,
-    FLOAT3 = 3
+    F32 = 3,
+    F32X3 = 4
   };
 
   enum IMAGE_TYPE {
