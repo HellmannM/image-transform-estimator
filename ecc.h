@@ -34,6 +34,9 @@ private:
     std::string make_cam_string(std::array<float, 3>& eye,
                                 std::array<float, 3>& center,
                                 std::array<float, 3>& up);
+    ssize_t getBestDecompositionIndex(const std::vector<cv::Mat>& rotations,
+                                      const std::vector<cv::Mat>& translations,
+                                      cv::Vec3d dir);
 
     size_t                      reference_image_width;
     size_t                      reference_image_height;

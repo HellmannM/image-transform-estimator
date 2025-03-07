@@ -219,13 +219,22 @@ bool ecc::update_camera(
     // calc dist eye to center for later use
     auto distance = cv::norm(cv::Point3f(center[0], center[1], center[2]) - cv::Point3f(eye[0], eye[1], eye[2]));
 
-    // solve
+    // decompose
     std::vector<cv::Mat> rotations;
     std::vector<cv::Mat> translations;
     cv::decomposeHomographyMat(homography_matrix, camera_matrix, rotations, translations, cv::noArray());
-    //TODO which rotation/translation to use?!
-    auto R = rotations[0];
-    auto translation = translations[0];
+    // check which decomposition to use
+    std::array<double, 3> d{center[0]-eye[0], center[1]-eye[1], center[2]-eye[2]};
+    cv::Mat dir_cv = cv::Mat(3, 1, CV_64F, d.data());
+    cv::Vec3d dir_cv_vec3d(dir_cv.reshape(3).at<cv::Vec3d>());
+    auto bestDecompositionIndex = getBestDecompositionIndex(rotations, translations, dir_cv_vec3d);
+    if (bestDecompositionIndex < 0)
+    {
+        std::cerr << "No valid decomposition! Not updating camera.\n";
+        return false;
+    }
+    auto R = rotations[bestDecompositionIndex];
+    auto translation = translations[bestDecompositionIndex];
 
     // camera eye
     std::array<double, 3> e{eye[0], eye[1], eye[2]};
@@ -247,8 +256,6 @@ bool ecc::update_camera(
     up[2] = static_cast<float>(up_cv.at<double>(2));
 
     // camera dir
-    std::array<double, 3> d{center[0]-eye[0], center[1]-eye[1], center[2]-eye[2]};
-    cv::Mat dir_cv = cv::Mat(3, 1, CV_64F, d.data());
     dir_cv = R * dir_cv;
     dir_cv /= cv::norm(dir_cv);
     // camera center
@@ -276,4 +283,31 @@ std::string ecc::make_cam_string(
 
 void ecc::set_good_match_threshold(float threshold)
 {
+}
+
+ssize_t ecc::getBestDecompositionIndex(const std::vector<cv::Mat>& rotations, const std::vector<cv::Mat>& translations, cv::Vec3d dir)
+{
+    dir /= cv::norm(dir);
+
+    ssize_t bestDecompositionIndex = -1;
+    double bestDotProduct = -1;
+
+    for (ssize_t i = 0; i < rotations.size(); i++) {
+        const auto& R = rotations[i];
+        const auto& t = translations[i];
+        cv::Vec3d t_vec3d(t.reshape(3).at<cv::Vec3d>());
+
+        // rotate translation
+        cv::Mat t_prime = R * t_vec3d;
+        cv::Vec3d t_prime_vec3d(t_prime.reshape(3).at<cv::Vec3d>());
+        double dotProduct = dir.dot(t_prime_vec3d);
+
+        // choose rotation where rotated translation moves forward (dot product > 0)
+        if (dotProduct > bestDotProduct) {
+            bestDotProduct = dotProduct;
+            bestDecompositionIndex = i;
+        }
+    }
+
+    return bestDecompositionIndex;
 }
