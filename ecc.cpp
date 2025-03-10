@@ -222,12 +222,13 @@ bool ecc::update_camera(
     // decompose
     std::vector<cv::Mat> rotations;
     std::vector<cv::Mat> translations;
-    cv::decomposeHomographyMat(homography_matrix, camera_matrix, rotations, translations, cv::noArray());
+    std::vector<cv::Mat> normals;
+    cv::decomposeHomographyMat(homography_matrix, camera_matrix, rotations, translations, normals);
     // check which decomposition to use
     std::array<double, 3> d{center[0]-eye[0], center[1]-eye[1], center[2]-eye[2]};
     cv::Mat dir_cv = cv::Mat(3, 1, CV_64F, d.data());
     cv::Vec3d dir_cv_vec3d(dir_cv.reshape(3).at<cv::Vec3d>());
-    auto bestDecompositionIndex = getBestDecompositionIndex(rotations, translations, dir_cv_vec3d);
+    auto bestDecompositionIndex = getBestDecompositionIndex(rotations, translations, normals, dir_cv_vec3d);
     if (bestDecompositionIndex < 0)
     {
         std::cerr << "No valid decomposition! Not updating camera.\n";
@@ -285,12 +286,15 @@ void ecc::set_good_match_threshold(float threshold)
 {
 }
 
-ssize_t ecc::getBestDecompositionIndex(const std::vector<cv::Mat>& rotations, const std::vector<cv::Mat>& translations, cv::Vec3d dir)
+ssize_t ecc::getBestDecompositionIndex(const std::vector<cv::Mat>& rotations,
+                                       const std::vector<cv::Mat>& translations,
+                                       const std::vector<cv::Mat>& normals,
+                                       cv::Vec3d dir)
 {
     dir /= cv::norm(dir);
 
     ssize_t bestDecompositionIndex = -1;
-    double bestDotProduct = -1;
+    double maxAlignment = -1;
 
     for (ssize_t i = 0; i < rotations.size(); i++) {
         const auto& R = rotations[i];
@@ -302,12 +306,24 @@ ssize_t ecc::getBestDecompositionIndex(const std::vector<cv::Mat>& rotations, co
         cv::Vec3d t_prime_vec3d(t_prime.reshape(3).at<cv::Vec3d>());
         double dotProduct = dir.dot(t_prime_vec3d);
 
-        // choose rotation where rotated translation moves forward (dot product > 0)
-        if (dotProduct > bestDotProduct) {
-            bestDotProduct = dotProduct;
-            bestDecompositionIndex = i;
+        // filter solutions:
+        // - rotated translation moves forward (R*t dot dir > 0)
+        // - normal matches image plane normal most closely (normal dot -dir)
+        if (dotProduct >= 0.0) {
+            auto normalAlignment = std::abs(normals[i].dot(-dir));
+            if (normalAlignment > maxAlignment) {
+                maxAlignment = normalAlignment;
+                bestDecompositionIndex = i;
+            }
         }
+
+//        std::cout << "index="<< i << "\n"
+//                  << "R:\n" << R << "\n"
+//                  << "t:\n" << t << "\n"
+//                  << "t_prime:\n" << t_prime << "\n"
+//                  << "dotProduct=" << dotProduct << "\n";
     }
+//    std::cout << "best index=" << bestDecompositionIndex << "\n";
 
     return bestDecompositionIndex;
 }

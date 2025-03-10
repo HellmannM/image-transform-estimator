@@ -36,6 +36,7 @@ private:
                                 std::array<float, 3>& up);
     ssize_t getBestDecompositionIndex(const std::vector<cv::Mat>& rotations,
                                       const std::vector<cv::Mat>& translations,
+                                      const std::vector<cv::Mat>& normals,
                                       cv::Vec3d dir);
 
     size_t                      reference_image_width;
